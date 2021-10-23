@@ -1,0 +1,1 @@
+Doamne ajuta
