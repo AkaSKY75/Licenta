@@ -1,14 +1,22 @@
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.gridlayout import GridLayout
+from kivy.uix.scrollview import ScrollView
+from kivy.uix.pagelayout import PageLayout
+from kivy.uix.stacklayout import StackLayout
+from kivy.uix.floatlayout import FloatLayout
+from kivy.clock import mainthread
+from kivy.uix.checkbox import CheckBox
 from kivy.uix.widget import Widget
 from kivy.uix.label import Label
+from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
 from kivy.uix.camera import Camera
 from kivy.utils import platform
 from kivy.uix.image import Image
 from kivy.core.image import Image as CoreImage
 from kivy.graphics.texture import Texture
-from kivy.graphics import Rotate, PushMatrix, PopMatrix, Translate, Color, Rectangle, BindTexture
+from kivy.graphics import Rotate, PushMatrix, PopMatrix, Translate, Color, Rectangle, BindTexture, Line, Ellipse
 from kivy.clock import Clock
 from kivy.uix.camera import Camera
 from kivy.lang import Builder
@@ -16,14 +24,17 @@ from kivy.core.window import Window
 from kivy.metrics import dp
 from os import listdir, getcwd
 from os.path import isfile, join
+from functools import partial
 #from kivy.graphics.texture import Texture
 from base64 import b64encode
+from datetime import datetime
 
 import cv2
 import io
 import numpy as np
-#import threading
-import _thread as thread
+import threading
+import json
+#import _thread as thread
 import time
 import random
 import requests
@@ -34,108 +45,20 @@ from azure.cognitiveservices.vision.customvision.training.models import ImageFil
 from msrest.authentication import ApiKeyCredentials
 import os, uuid
 
+#ENDPOINT = "https://southcentralus.api.cognitive.microsoft.com/"
+#training_key = "5887d793471f48dc8417e84c699d561d"
+#prediction_key = "5887d793471f48dc8417e84c699d561d"
+#prediction_resource_id = "/subscriptions/2c0c2800-5672-4899-963d-d9c6e8984e61/resourceGroups/appsvc_windows_centralus/providers/Microsoft.CognitiveServices/accounts/Licenta"
+#project_id = "2fbc8c69-c0c5-42f7-83c1-63e91c12751b"
+
 ENDPOINT = "https://southcentralus.api.cognitive.microsoft.com/"
 training_key = "5887d793471f48dc8417e84c699d561d"
 prediction_key = "5887d793471f48dc8417e84c699d561d"
 prediction_resource_id = "/subscriptions/2c0c2800-5672-4899-963d-d9c6e8984e61/resourceGroups/appsvc_windows_centralus/providers/Microsoft.CognitiveServices/accounts/Licenta"
-project_id = "2fbc8c69-c0c5-42f7-83c1-63e91c12751b"
+project_id = "1aa5fcfe-5fa4-494d-96a1-2208b8c148e7"
+version = "v3.4-preview"
 
-"""
-class CameraRead(threading.Thread):
-    def __init__(self):
-        threading.Thread.__init__(self)
-    def run(self):
-        vid = cv2.VideoCapture(0)
-        while 1:
-            ret, frame = vid.read()
-            cv2.imshow('vid', frame)
-            print("Here")
-            time.sleep(1)
-"""
-
-class KivyCamera(Image):
-    def __init__(self, capture=None, fps=0, **kwargs):
-        super(KivyCamera, self).__init__(**kwargs)
-        # self.capture = cv2.VideoCapture("/sdcard2/python-apk/2.mp4")
-        # print "file path exist :" + str(os.path.exists("/sdcard2/python-apk/1.mkv"))
-        # self.capture = cv2.VideoCapture(0)
-        self.capture = Camera(index=0, resolution=(640, 480), play=True)
-        Clock.schedule_interval(self.update, 1.0 / fps)
-
-    def update(self, dt):
-        self.texture = self.capture.texture
-        #ret, frame = self.capture.read()
-        # print str(os.listdir('/sdcard2/'))
-        #if ret:
-        # Example
-        """
-            url = 'https://i.pinimg.com/564x/2a/3b/17/2a3b175c8b6752a62a6f6915ff472f8c.jpg'
-            bimage = requests.get(url).content
-            file_extension = 'jpg'
-            buf = io.BytesIO(bimage)
-            cim = CoreImage(buf, ext=file_extension)
-            self.image = Image(texture=cim.texture)
-            self.add_widget(self.image)
-        """
-
-        """
-            #buf = cv2.flip(frame, 2)
-            bytes = io.BytesIO(cv2.imencode('.jpg', frame)[1].tobytes())
-            cim = CoreImage(bytes, ext="jpg")
-            image_texture = cim.texture
-            self.texture = image_texture
-        """
-
-        """
-            # image is a Kivy Image widget
-            # convert it to texture
-            buf1 = cv2.flip(frame, 0)
-            buf = buf1.tostring()
-            image_texture = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='bgr')
-            image_texture.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
-            # display image from the texture
-            self.texture = image_texture
-        """
-"""
-class AndroidCamera(Camera):
-    camera_resolution = (640, 480)
-    counter = 0
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.index = 0
-        resolution: self.camera_resolution
-        allow_stretch: True
-        play: True
-
-    def _camera_loaded(self, *largs):
-        self.texture = Texture.create(size=np.flip(self.camera_resolution, 0), colorfmt='rgb')
-        self.texture_size = list(self.texture.size)
-
-    def on_tex(self, *l):
-        if self._camera._buffer is None:
-            print("None here")
-            return None
-        frame = self.frame_from_buf()
-        self.frame_to_screen(frame)
-        super(AndroidCamera, self).on_tex(*l)
-
-    def frame_from_buf(self):
-        w, h = self.resolution
-        frame = np.frombuffer(self._camera._buffer.tostring(), 'uint8').reshape((h + h // 2, w))
-        frame_bgr = cv2.cvtColor(frame, 93)
-        return np.rot90(frame_bgr, 3)
-
-    def frame_to_screen(self, frame):
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        cv2.putText(frame_rgb, str(self.counter), (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
-        self.counter += 1
-        flipped = np.flip(frame_rgb, 0)
-        buf = flipped.tostring()
-        self.texture.blit_buffer(buf, colorfmt='rgb', bufferfmt='ubyte')
-"""
-
-class Main(Widget):
+class Main(FloatLayout):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         """
@@ -146,26 +69,49 @@ class Main(Widget):
             Rectangle(pos=(0, 0), size=(50, 50))
             PopMatrix()
         """
+        self.tags = {}
+        self.iterations = {"selected": None}
+
 
         self.boundingBox_coords = [(-1, -1), (-1, -1)]
+        self.probabilities = {"class":"", "probability":.0,"left":.0,"top":.0,"width":.0,"height":.0, "startx":0, "starty":0, "stopx":0, "stopy":0}
+        self.boundingBox_label = None
 
-        self.is_process_ongoing = False
+        """
+            0 - normal camera feed
+            1 - lock for labeling
+            2 - sending to cloud
+        """
+        self.process_state = 0
 
-        self.button = Button(text="Click me", on_press=self.button_pressed, size=(Window.size[0], Window.size[1]/10), pos=(0, Window.size[1]-Window.size[1]/10))
+        #self.button = Button(text="Label", on_press=self.button_pressed, size=(Window.size[0], Window.size[1]/10), pos=(0, Window.size[1]-Window.size[1]/10))
+        self.button = Button(text="Label", on_press=self.button_pressed, size_hint=(1, .1), pos_hint={"x": 0, "y": .9})
         self.add_widget(self.button)
 
-        Window.bind(on_resize=self.on_window_resize)
+        #self.train_button = Button(text="Train", on_press=self.train_button_pressed, size=(Window.size[0], Window.size[1]/10), pos=(0, 0))
+        self.train_button = Button(text="Train", on_press=self.train_button_pressed, size_hint=(1, .1), pos_hint={"x": 0, "y": 0})
+        self.add_widget(self.train_button)
 
-        self.camera = Camera(index=0, resolution=(640, 480), play=True, allow_stretch=True, pos=(0, 0), size=(Window.size[0], 480/640*Window.size[0]), on_touch_down=self.camera_click)
+        #Window.bind(on_resize=self.on_window_resize)
+
+        #self.camera.size = (640/480*height*9/10, height*9/10)
+        #self.camera.pos = ((width-self.camera.size[0])/2, 0)
+        #self.camera = Camera(index=0, resolution=(640, 480), play=True, allow_stretch=True, pos=((Window.size[0]-640/480*Window.size[1]*8/10)/2, Window.size[1]/10), size=(640/480*Window.size[1]*8/10, Window.size[1]*8/10))
+        self.camera = Camera(index=0, resolution=(640, 480), play=True, allow_stretch=True, pos_hint={"x":0,"y":.1}, size_hint=(1, .8))
 #       self.camera._camera.on_load = self.camera_on_load
         self.camera._camera.unbind(on_texture=self.camera.on_tex)
         self.camera._camera.bind(on_texture=self.on_texture_change)
 
-        self.boundingBox = Image(allow_stretch=True, pos=(0, 0), size=(Window.size[0], 480/640*Window.size[0]))
-        self.nparr = np.zeros((480, 640, 4), dtype=np.uint8)
-        image_texture = Texture.create(size=(self.nparr.shape[1], self.nparr.shape[0]), colorfmt='rgba')
-        image_texture.blit_buffer(self.nparr.tobytes(), colorfmt='rgba', bufferfmt='ubyte')
-        self.boundingBox.texture = image_texture
+        self.training_popup = None
+
+        #self.boundingBox = Image(allow_stretch=True, pos=((Window.size[0]-640/480*Window.size[1]*8/10)/2, Window.size[1]/10), size=(640/480*Window.size[1]*8/10, Window.size[1]*8/10))
+        self.boundingBox = Image(allow_stretch=True, pos_hint=self.camera.pos_hint, size_hint=self.camera.size_hint)
+        nparr = np.zeros((480, 640, 4), dtype=np.uint8)
+        #nparr[:,:] = [0, 255, 0, 127]
+        self.blank_transparent_texture = Texture.create(size=(nparr.shape[1], nparr.shape[0]), colorfmt='rgba')
+        self.blank_transparent_texture.blit_buffer(nparr.tobytes(), colorfmt='rgba', bufferfmt='ubyte')
+        self.boundingBox.texture = self.blank_transparent_texture
+        self.clear_image()
 
         """
         with self.camera.canvas.before:
@@ -210,10 +156,45 @@ class Main(Widget):
 #        prediction_credentials = ApiKeyCredentials(in_headers={"Prediction-key": prediction_key})
 #        predictor = CustomVisionPredictionClient(ENDPOINT, prediction_credentials)
 
+        # TODO: on resize for : self detect label, new train menu added
+
         self.add_widget(self.camera)
 
         self.add_widget(self.boundingBox)
 
+        url = ENDPOINT+'customvision/'+version+'/training/projects/'+project_id+'/iterations'
+
+        response = requests.get(url, headers = {"Training-Key": training_key})
+
+        #print(response.content)
+
+        response = json.loads(response.content)
+
+        for i in response:
+            self.iterations[i["id"]] = {"name": i["name"], "lastModified": datetime.strptime(i["lastModified"], '%Y-%m-%dT%H:%M:%S.%fZ'), "tags": []}
+
+            url = ENDPOINT+'customvision/'+version+'/training/projects/'+project_id+'/iterations/'+i["id"]+'/performance'
+            response_tags_from_iterations = requests.get(url, headers = {"Training-Key": training_key})
+            response_tags_from_iterations = json.loads(response_tags_from_iterations.content)
+            for j in response_tags_from_iterations["perTagPerformance"]:
+                self.iterations[i["id"]]["tags"].append(j["id"])
+
+        url = ENDPOINT+'customvision/'+version+'/training/projects/'+project_id+'/tags'
+
+        response = requests.get(url, headers = {"Training-Key": training_key})
+
+        response = json.loads(response.content)
+
+        for i in response:
+            self.tags[i["id"]] = {"name": i["name"], "selected": True}
+
+        self.object_detection_thread = threading.Thread(target=self.detect_objects_thread)
+        self.object_detection_thread.daemon = True
+        self.object_detection_thread.start()
+
+        #Clock.schedule_interval(self.detect_objects, 1.0)
+
+        """
         self.boxLayout = BoxLayout(pos=(0, dp(200)), size=(Window.size[0]/2, Window.size[1]*9/10-dp(200)), orientation="vertical")
         with self.boxLayout.canvas:
             Color(1, 0, 0, 0.5)
@@ -227,8 +208,6 @@ class Main(Widget):
         self.boxLayout.camera_pos_y_label = Label(text="Camera y pos: "+str(self.camera.pos[1]), color="black")
         self.boxLayout.camera_size_x_label = Label(text="Camera x size: "+str(self.camera.size[0]), color="black")
         self.boxLayout.camera_size_y_label = Label(text="Camera y size: "+str(self.camera.size[1]), color="black")
-
-
 
         self.plus_button = Button(text="+", on_press=self.image_grow, size=(dp(100), dp(100)), pos=(Window.size[0]-dp(100), dp(100)), background_color=(1, 0, 0, 0.5))
         self.minus_button = Button(text="-", on_press=self.image_shrink, size=(dp(100), dp(100)), pos=(Window.size[0]-dp(100), 0), background_color=(1, 0, 0, 0.5))
@@ -253,10 +232,7 @@ class Main(Widget):
         self.boxLayout.add_widget(self.boxLayout.camera_pos_y_label)
         self.boxLayout.add_widget(self.boxLayout.camera_size_x_label)
         self.boxLayout.add_widget(self.boxLayout.camera_size_y_label)
-
-
-
-
+        """
         """
         url = 'https://i.pinimg.com/564x/2a/3b/17/2a3b175c8b6752a62a6f6915ff472f8c.jpg'
         bimage = requests.get(url).content
@@ -271,7 +247,35 @@ class Main(Widget):
 
 #        self.add_widget(self.image)
 
-#        Clock.schedule_interval(self.update, 1.0)
+    @mainthread
+    def create_boundingBox(self, startx=-1, starty=-1, stopx=-1, stopy=-1):
+        if self.process_state == 1 or self.process_state == 3:
+            startx,starty,stopx,stopy = self.get_calculated_coords()
+        elif self.process_state == 10:
+            if self.boundingBox_label is not None:
+                self.remove_widget(self.boundingBox_label)
+            print(self.probabilities["class"])
+            self.boundingBox_label = Label(text=self.probabilities["class"]+"\n{:.2f}%".format(self.probabilities["probability"]*100), color=(255, 255, 255, 1), size=(dp(100), dp(50)), pos=(startx+dp(100), stopy+dp(50)))
+            with self.boundingBox_label.canvas.before:
+                Color(0, 255, 0, 0.5)
+                Rectangle(pos=self.boundingBox_label.pos, size=self.boundingBox_label.size)
+            self.add_widget(self.boundingBox_label)
+
+        nparr = np.zeros((480, 640, 4), dtype=np.uint8)
+        nparr[starty:stopy,startx:startx+10,1::2] = 255
+        nparr[starty:stopy,stopx-10:stopx,1::2] = 255
+        nparr[stopy-10:stopy,startx:stopx,1::2] = 255
+        nparr[starty:starty+10,startx:stopx,1::2] = 255
+
+        image_texture = Texture.create(size=(nparr.shape[1], nparr.shape[0]), colorfmt='rgba')
+        image_texture.blit_buffer(nparr.tobytes(), colorfmt='rgba', bufferfmt='ubyte')
+        self.boundingBox.texture = image_texture
+        self.boundingBox.canvas.ask_update()
+
+    @mainthread
+    def clear_image(self):
+        self.boundingBox.texture = self.blank_transparent_texture
+        self.boundingBox.canvas.ask_update()
 
     def update(self, dt):
         if self.camera.texture:
@@ -308,12 +312,12 @@ class Main(Widget):
             """
 
     def on_texture_change(self, camera):
-        if self.is_process_ongoing or platform == "android":
+        if self.process_state == 6 or ((self.process_state == 0 or self.process_state == 10) and platform == "android"):
             nparr = np.frombuffer(camera.texture.pixels, np.uint8).reshape((480, 640, 4))
             nparr = nparr.copy()
             nparr.setflags(write=1)
 
-            if self.is_process_ongoing:
+            if self.process_state == 6:
                 nparr[:,0:10,1::2] = 255 # left border [ : => select all lines,0:10 => select columns 0 to 10,1::2 => select nested array and set element 1 and 3 to 255 ( R G B A => G and A = 255)]
                 nparr[:,-10:,1::2] = 255 # right border
                 nparr[0:10,:,1::2] = 255 # upper border
@@ -328,44 +332,322 @@ class Main(Widget):
             self.camera.texture = texture = image_texture
             self.camera.texture_size = list(image_texture.size)
             self.camera.canvas.ask_update()
-            #cv2.imshow("Halo", nparr)
-            #self.is_process_ongoing = False
-        else:
-            self.camera.texture = texture = camera.texture
-            self.camera.texture_size = list(texture.size)
-            self.camera.canvas.ask_update()
+            self.camera_thread_params = (texture.pixels, texture.size)
+
+        if (self.process_state == 0 or self.process_state == 10) and platform != "android":
+            if platform != "android":
+                self.camera.texture = texture = camera.texture
+                self.camera.texture_size = list(texture.size)
+                self.camera.canvas.ask_update()
+                self.camera_thread_params = (texture.pixels, texture.size)
 
     """
     def camera_on_load(self):
         print("camera_on_load")
     """
 
-    def camera_click(self, obj, args):
-        if args.pos[0] >= self.camera.pos[0] and args.pos[0] <= self.camera.size[0]+self.camera.pos[0] and args.pos[1] >= self.camera.pos[1] and args.pos[1] <= self.camera.size[1]+self.camera.pos[1]:
-            print("Mouse coords are: ("+str(args.pos[0])+", "+str(args.pos[1])+")")
-            print("Clickable image area is from ("+str(self.camera.pos[0])+ ", "+str(self.camera.pos[1])+")"+" to ("+str(self.camera.size[0])+", "+str(self.camera.size[1])+")")
-            if self.boundingBox_coords[0] == (-1, -1):
-                self.boundingBox_coords[0] = (int(args.pos[0]-self.camera.pos[0]), int(args.pos[1]))
-            elif self.boundingBox_coords[1] == (-1, -1):
-                self.boundingBox_coords[1] = (int(args.pos[0]-self.camera.pos[0]), int(args.pos[1]))
-                nparr = np.zeros((480, 640, 4), dtype=np.uint8)
-                nparr[self.boundingBox_coords[0][1]:self.boundingBox_coords[1][1],self.boundingBox_coords[0][0]:self.boundingBox_coords[0][0]+10,1::2] = 255
-                nparr[self.boundingBox_coords[0][1]:self.boundingBox_coords[1][1],self.boundingBox_coords[1][0]-10:self.boundingBox_coords[1][0],1::2] = 255
-                nparr[self.boundingBox_coords[1][1]-10:self.boundingBox_coords[1][1],self.boundingBox_coords[0][0]:self.boundingBox_coords[1][0],1::2] = 255
-                nparr[self.boundingBox_coords[0][1]:self.boundingBox_coords[0][1]+10,self.boundingBox_coords[0][0]:self.boundingBox_coords[1][0],1::2] = 255
+    def change_state(self, state):
+        valid_state = False
+        # This state should be set when process is in label selection (state 2)
+        if state == 0:
+            if self.process_state == 2: #sanity check, we can go to state 0 only from state 2 or 3
+                self.button.text = "Label"
+                self.camera.play = True
+                valid_state = True
+            elif self.process_state == 5:
+                self.button.text = "Label"
+                self.boundingBox_coords = [(-1, -1), (-1, -1)]
+                self.camera.play = True
+                valid_state = True
+            elif self.process_state == 7 or self.process_state == 8 or self.process_state == 9:
+                self.button.text = "Label"
+                self.train_button.text = "Train"
+                self.training_popup.clear_widgets()
+                self.remove_widget(self.training_popup)
+                valid_state = True
+        elif state == 1:
+            if self.process_state == 2:
+                self.button.text = "Upload"
+                valid_state = True
+        elif state == 2:
+            if self.process_state == 0 or self.process_state == 10:
+                self.clear_image()
+                if self.boundingBox_label is not None:
+                    self.remove_widget(self.boundingBox_label)
+                self.button.text = "Cancel"
+                self.camera.play = False
+                valid_state = True
+            elif self.process_state == 1:
+                self.button.text = "Cancel"
+                valid_state = True
+            elif self.process_state == 4:
+                self.clear_image()
+                self.remove_widget(self.boundingBox_input)
+                self.boundingBox_coords = [(-1, -1), (-1, -1)]
+                self.button.text = "Cancel"
+                valid_state = True
+        elif state == 3:
+            if self.process_state == 1:
+                valid_state = True
+        elif state == 4:
+            if self.process_state == 3:
+                valid_state = True
+        elif state == 5:
+            if self.process_state == 4:
+                self.clear_image()
+                self.button.text = "Uploading..."
+                #self.camera.play = True
+                valid_state = True
+        elif state == 7:
+            if self.process_state == 0 or self.process_state == 10:
+                self.button.text = "Cancel"
+                self.train_button.text = "New training"
+                self.clear_image()
+                if self.boundingBox_label is not None:
+                    self.remove_widget(self.boundingBox_label)
+                self.training_popup = BoxLayout(pos_hint={"x":.125, "y":.125}, size_hint=(.75, .75), orientation="vertical")
+                self.training_popup.id = "training_popup"
+                self.training_popup.bind(pos=self.on_widget_pos_size, size=self.on_widget_pos_size)
+                self.training_popup.label = Label(text="Select iteration", color=(255, 255, 255, 1), pos=(self.training_popup.pos[0], self.training_popup.pos[1]+self.training_popup.size[1]-dp(40)), size=(self.training_popup.size[0], dp(40)))
 
-
+                self.training_popup.scrollview_iterations = ScrollView()
+                """
+                nparr = np.zeros((int(self.training_popup.next_image.size[1]), int(self.training_popup.next_image.size[0]), 4), dtype=np.uint8)
+                nparr[:,:,1::2] = 255
+                print(nparr)
                 image_texture = Texture.create(size=(nparr.shape[1], nparr.shape[0]), colorfmt='rgba')
                 image_texture.blit_buffer(nparr.tobytes(), colorfmt='rgba', bufferfmt='ubyte')
-                self.boundingBox.texture = image_texture
+                self.training_popup.next_image.texture = image_texture
+                """
+                with self.training_popup.canvas.before:
+                    Color(233, 236, 239, 1)
+                    #Line(width=10, rounded_rectangle=(self.training_popup.pos[0], self.training_popup.pos[1], self.training_popup.size[0], self.training_popup.size[1], 25))
+                    Rectangle(pos=(self.training_popup.pos[0], self.training_popup.pos[1]), size=(self.training_popup.size[0], self.training_popup.size[1]))
+                self.training_popup.scrollview_iterations.gridLayout = GridLayout(cols=1, size_hint_y=None)
+                self.training_popup.scrollview_iterations.gridLayout.bind(minimum_height=self.training_popup.scrollview_iterations.gridLayout.setter('height'))
+
+                self.add_widget(self.training_popup)
+                self.training_popup.add_widget(self.training_popup.scrollview_iterations)
+                #self.training_popup.add_widget(self.training_popup.scrollview_tags)
+                self.training_popup.scrollview_iterations.add_widget(self.training_popup.scrollview_iterations.gridLayout)
+                #self.training_popup.add_widget(self.training_popup.label)
+
+
+                for i in self.iterations.keys():
+                    if i != "selected":
+                        stackLayout = StackLayout(size_hint_y=None)
+                        stackLayout.id = i
+                        if self.iterations["selected"] == i:
+                            stackLayout.bind(pos=self.on_widget_pos_size, size=self.on_widget_pos_size)
+
+                        #print(boxLayout.id)
+                        #boxLayout.bind(on_touch_down=self.iteration_select)
+                        stackLayout.bind(on_touch_down=self.iteration_select)
+                        self.training_popup.scrollview_iterations.gridLayout.add_widget(stackLayout)
+                        label = Label(text=self.iterations[i]["name"], color=(255, 255, 255, 1), size_hint=(.3, None), height=dp(20))
+                        stackLayout.add_widget(label)
+                        label = Label(text=self.iterations[i]["lastModified"].strftime("%b %d %Y at %H:%M:%S"), color=(255, 255, 255, 1), size_hint=(.3, None), height=dp(20))
+                        stackLayout.add_widget(label)
+                        gridLayout = GridLayout(cols=1, size_hint_y=None, size_hint_x=.3)
+                        gridLayout.bind(minimum_height=gridLayout.setter('height'))
+                        stackLayout.bind(minimum_height=stackLayout.setter('height'))
+                        stackLayout.add_widget(gridLayout)
+
+                        for j in self.iterations[i]["tags"]:
+                            label = Label(text=self.tags[j]["name"], color=(255, 255, 255, 1), size_hint_y=None, height=dp(20))
+                            gridLayout.add_widget(label)
+
+
+                #x = threading.Thread(target=self.train_thread, args=())
+                #x.daemon = True
+                #x.start()
+                valid_state = True
+            elif self.process_state == 8 or self.process_state == 9:
+                self.change_state(0)
+                self.change_state(7)
+        elif state == 8:
+            if self.process_state == 7:
+                self.button.text = "Cancel"
+                self.train_button.text = "Select iteration"
+                self.training_popup.clear_widgets()
+                self.training_popup.scrollview_tags = ScrollView(pos_hint={"x":0.05}, size_hint=(0.9, .9))#ScrollView()
+                self.training_popup.scrollview_images = ScrollView(pos_hint={"x":0.05}, size_hint=(0.9, .9))#ScrollView()
+
+                self.training_popup.next_image = Image(pos_hint={"x": .9}, size_hint=(.1, .1), source="arrow_right.png")
+                self.training_popup.next_image.bind(on_touch_down=self.training_popup_next_page)
+                self.training_popup.previous_image = Image(size_hint=(.1, .1), source="arrow_left.png")
+                self.training_popup.previous_image.bind(on_touch_down=self.training_popup_previous_page)
+
+                self.training_popup.scrollview_tags.gridLayout = GridLayout(cols=1, size_hint_y=None)
+                self.training_popup.scrollview_tags.gridLayout.bind(minimum_height=self.training_popup.scrollview_tags.gridLayout.setter('height'))
+
+                self.training_popup.scrollview_images.gridLayout = GridLayout(cols=10, size_hint_y=None, spacing=(10, 10))
+                self.training_popup.scrollview_images.gridLayout.bind(minimum_height=self.training_popup.scrollview_images.gridLayout.setter('height'))
+
+                self.training_popup.add_widget(self.training_popup.scrollview_tags)
+                self.training_popup.scrollview_tags.add_widget(self.training_popup.scrollview_tags.gridLayout)
+                self.training_popup.scrollview_images.add_widget(self.training_popup.scrollview_images.gridLayout)
+                self.training_popup.add_widget(self.training_popup.next_image)
+
+                for i in self.tags.keys():
+                    boxLayout = BoxLayout(size_hint_y=None, size=(1, dp(100)))
+                    #print(boxLayout.id)
+                    #boxLayout.bind(on_touch_down=self.iteration_select)
+                    self.training_popup.scrollview_tags.gridLayout.add_widget(boxLayout)
+                    label = Label(text=self.tags[i]["name"], color=(255, 255, 255, 1))
+                    boxLayout.add_widget(label)
+                    checkbox = CheckBox(active=True)
+                    checkbox.id = i
+                    checkbox.bind(active=self.tag_select)
+                    boxLayout.add_widget(checkbox)
+
+                valid_state = True
+
+            elif self.process_state == 9:
+                self.training_popup.remove_widget(self.training_popup.scrollview_images)
+                self.training_popup.remove_widget(self.training_popup.previous_image)
+                self.training_popup.add_widget(self.training_popup.scrollview_tags)
+                self.training_popup.add_widget(self.training_popup.next_image)
+                valid_state = True
+        elif state == 9:
+            if self.process_state == 8:
+                self.training_popup.scrollview_images.gridLayout.clear_widgets()
+                self.training_popup.remove_widget(self.training_popup.scrollview_tags)
+                self.training_popup.remove_widget(self.training_popup.next_image)
+                self.training_popup.add_widget(self.training_popup.scrollview_images)
+                self.training_popup.add_widget(self.training_popup.previous_image)
+                x = threading.Thread(target=self.image_load_thread)
+                x.daemon = True
+                x.start()
+                valid_state = True
+        elif state == 10:
+            if self.process_state == 2 or self.process_state == 7 or self.process_state == 8 or self.process_state == 9:
+                self.change_state(0)
+                valid_state = True
+        if valid_state == True:
+            self.process_state = state
+
+    def on_widget_pos_size(self, obj, largs):
+        obj.canvas.before.clear()
+        if obj.id == "training_popup":
+            with obj.canvas.before:
+                Color(233, 236, 239, 1)
+                #Line(width=10, rounded_rectangle=(self.training_popup.pos[0], self.training_popup.pos[1], self.training_popup.size[0], self.training_popup.size[1], 25))
+                Rectangle(pos=obj.pos, size=obj.size)
+        elif obj.id == "image_preview":
+            with obj.canvas.before:
+                Color(0, 0, 0, 0.9)
+                #Line(width=10, rounded_rectangle=(self.training_popup.pos[0], self.training_popup.pos[1], self.training_popup.size[0], self.training_popup.size[1], 25))
+                Rectangle(pos=obj.pos, size=obj.size)
+        else:
+            with obj.canvas.before:
+                Color(0, 255, 0, 0.5)
+                #boxLayout.line = Line(points=[0, 10, 100, 0], width=10)
+                Rectangle(pos=obj.pos, size=obj.size)
+
+    def tag_select(self, obj, state):
+        self.tags[obj.id]["selected"] = state
+
+    def training_popup_previous_page(self, obj, touch):
+        if self.process_state == 9 and obj.collide_point(*touch.pos):
+            self.change_state(8)
+
+    def training_popup_next_page(self, obj, touch):
+        if self.process_state == 8 and obj.collide_point(*touch.pos):
+            self.change_state(9)
+
+    def iteration_select(self, obj, touch):
+        if obj.collide_point(*touch.pos):
+            for i in self.training_popup.scrollview_iterations.gridLayout.children:
+                i.canvas.before.clear()
+            if self.iterations["selected"] == None:
+                self.iterations["selected"] = obj.id
+                with obj.canvas.before:
+                    Color(0, 255, 0, 0.5)
+                    #boxLayout.line = Line(points=[0, 10, 100, 0], width=10)
+                    Rectangle(pos=obj.pos, size=obj.size)
             else:
-                self.boundingBox_coords = [(-1, -1), (-1, -1)]
-                print(self.boundingBox_coords)
-                image_texture = Texture.create(size=(self.nparr.shape[1], self.nparr.shape[0]), colorfmt='rgba')
-                image_texture.blit_buffer(self.nparr.tobytes(), colorfmt='rgba', bufferfmt='ubyte')
-                self.boundingBox.texture = image_texture
+                self.iterations["selected"] = None
 
 
+    def canvas_update(self, obj, *args):
+        obj.rect.pos = obj.pos
+        obj.rect.size = obj.size
+
+    def get_calculated_coords(self):
+        startx = self.boundingBox_coords[0][0]
+        starty = self.boundingBox_coords[0][1]
+
+        stopx = self.boundingBox_coords[1][0]
+        stopy = self.boundingBox_coords[1][1]
+
+        if startx > stopx:
+            aux = startx
+            startx = stopx
+            stopx = aux
+
+        if starty > stopy:
+            aux = starty
+            starty = stopy
+            stopy = aux
+
+        return startx,starty,stopx,stopy
+
+    def on_touch_up(self, touch):
+        if self.process_state == 1:
+            self.change_state(2)
+        elif self.process_state == 3:
+            """
+            newX = (currentX/currentWidth)*newWidth
+            newY = (currentY/currentHeight)*newHeight
+
+            currentX = (newX/newWidth)*currentWidth
+            currentY = (newY/newHeight)*currentHeight
+            """
+            startx,starty,stopx,stopy = self.get_calculated_coords()
+
+            original_coords = (int(startx/self.camera.resolution[0]*self.camera.size[0])+self.camera.pos[0], int(stopy/self.camera.resolution[1]*self.camera.size[1])+self.camera.pos[1])
+            self.boundingBox_input = TextInput(text="Place label here", size_hint=(None, None), pos_hint={"x":original_coords[0]/self.size[0],"y":original_coords[1]/self.size[1]}, size=(dp(100), dp(50)), background_color=(0, 255, 0, 0.5))
+            self.add_widget(self.boundingBox_input)
+            self.change_state(4)
+        return super(Main, self).on_touch_up(touch)
+
+    def on_touch_move(self, touch):
+        if (self.process_state == 1 or self.process_state == 3) and touch.x >= self.camera.pos[0] and touch.x <= self.camera.size[0]+self.camera.pos[0] and touch.y >= self.camera.pos[1] and touch.y <= self.camera.size[1]+self.camera.pos[1]:
+            original_coords = (int((touch.x-self.camera.pos[0])/self.camera.size[0]*self.camera.resolution[0]), int((touch.y-self.camera.pos[1])/self.camera.size[1]*self.camera.resolution[1]))
+            self.boundingBox_coords[1] = original_coords
+            #self.clear_image()
+            self.create_boundingBox()
+            self.change_state(3)
+        return super(Main, self).on_touch_move(touch)
+
+    def on_touch_down(self, touch):
+        if touch.x >= self.camera.pos[0] and touch.x <= self.camera.size[0]+self.camera.pos[0] and touch.y >= self.camera.pos[1] and touch.y <= self.camera.size[1]+self.camera.pos[1]:
+            if self.process_state == 2 or self.process_state == 1 or (self.process_state == 4 and (touch.x < self.boundingBox_input.pos[0] or touch.x > self.boundingBox_input.pos[0]+self.boundingBox_input.size[0] or touch.y < self.boundingBox_input.pos[1] or touch.y > self.boundingBox_input.pos[1]+self.boundingBox_input.size[1])):
+                # Formula that calculates actual coordinates of resized image
+                """
+                newX = (currentX/currentWidth)*newWidth
+                newY = (currentY/currentHeight)*newHeight
+
+                currentX = (newX/newWidth)*currentWidth
+                currentY = (newY/newHeight)*currentHeight
+                """
+                original_coords = (int((touch.x-self.camera.pos[0])/self.camera.size[0]*self.camera.resolution[0]), int((touch.y-self.camera.pos[1])/self.camera.size[1]*self.camera.resolution[1]))
+                """
+                print("Mouse coords are: ("+str(touch.x)+", "+str(touch.y)+")")
+                print("Original coords are: ("+str(original_coords[0])+", "+str(original_coords[1])+")")
+                print("Clickable image area is from ("+str(self.camera.pos[0])+ ", "+str(self.camera.pos[1])+")"+" to ("+str(self.camera.size[0])+", "+str(self.camera.size[1])+")")
+                """
+                if self.process_state == 2:
+                    self.boundingBox_coords[0] = (original_coords[0], original_coords[1])
+
+
+                    self.change_state(1)
+                else:
+                    self.change_state(2)
+        return super(Main, self).on_touch_down(touch)
+
+    """
     def update_metrics(self):
         self.boxLayout.window_size_x_label.text = "Window x size: "+str(Window.size[0])
         self.boxLayout.window_size_y_label.text = "Window y size: "+str(Window.size[1])
@@ -418,10 +700,150 @@ class Main(Widget):
             Rotate(origin=self.center, angle=45)
         with self.camera.canvas.after:
             PopMatrix()
+    """
+
+    def train_thread(self):
+        url = ENDPOINT+'customvision/'+version+'/training/projects/'+project_id+'/train?forceTrain=true'
+
+        response = requests.post(url, headers = {"Content-Type": "application/json", "Training-Key": training_key})
+
+        print(response.content)
+
+        iteration_id = json.loads(response.content)["id"]
+
+        url = ENDPOINT+'customvision/'+version+'/training/projects/'+project_id+'/iterations/'+iteration_id
+
+        response = requests.get(url, headers = {"Training-Key": training_key})
+
+        while json.loads(response.content)["status"] != "Completed":
+            response = requests.get(url, headers = {"Training-Key": training_key})
+
+        self.change_state(0)
+
+
+    def detect_objects_thread(self):
+        while 1:
+            if self.process_state == 10:
+                #Clock.schedule_once(partial(self.get_camera_parameters,pixels,size))
+                nparr = np.frombuffer(self.camera_thread_params[0], np.uint8).reshape((self.camera_thread_params[1][1], self.camera_thread_params[1][0], 4))
+                retval, buffer = cv2.imencode('.png', nparr)
+                url = ENDPOINT+'customvision/'+version+'/training/projects/'+project_id+'/quicktest/image?iterationId=04cfc149-836e-4296-a93a-f156807b4e98&store=false'
+
+
+                response = requests.post(url, data = bytes(buffer), headers = {"Content-Type": "application/octet-stream", "Training-Key": training_key})
+                predictions = json.loads(response.content)
+
+                image_id = predictions["id"]
+
+                self.probabilities["class"] = ""
+                self.probabilities["probability"] = .0
+                self.probabilities["left"] = .0
+                self.probabilities["top"] = .0
+                self.probabilities["height"] = 0
+                self.probabilities["startx"] = 0
+                self.probabilities["starty"] = 0
+                self.probabilities["stopx"] = 0
+                self.probabilities["stopy"] = 0
+
+                for p in predictions["predictions"]:
+                    if p["probability"] > self.probabilities["probability"]:
+                        self.probabilities["class"] = p["tagName"]
+                        self.probabilities["probability"] = p["probability"]
+                        self.probabilities["left"] = p["boundingBox"]["left"]
+                        self.probabilities["top"] = p["boundingBox"]["top"]
+                        self.probabilities["width"] = p["boundingBox"]["width"]
+                        self.probabilities["height"] = p["boundingBox"]["height"]
+                        self.probabilities["startx"] = int(self.probabilities["left"]*self.camera.resolution[0])
+                        self.probabilities["stopx"] = int(self.probabilities["startx"] + self.probabilities["width"]*self.camera.resolution[0])
+                        self.probabilities["stopy"] = int(self.camera.resolution[1] - self.probabilities["top"]*self.camera.resolution[1])
+                        self.probabilities["starty"] = int(self.probabilities["stopy"] - self.probabilities["height"]*self.camera.resolution[1])
+
+                if self.probabilities["probability"] > .0:
+                    self.create_boundingBox(self.probabilities["startx"], self.probabilities["starty"], self.probabilities["stopx"], self.probabilities["stopy"])
+
+                url = ENDPOINT+'customvision/'+version+'/training/projects/'+project_id+'/images?imageIds='+image_id
+
+                #use the 'headers' parameter to set the HTTP headers:
+                response = requests.delete(url, headers = {"Training-Key": training_key})
+
+                time.sleep(1)
+
+    @mainthread
+    def preview_image_upload_texture(self, obj, nparr):
+        image_texture = Texture.create(size=(nparr.shape[1], nparr.shape[0]), colorfmt='rgb')
+        image_texture.blit_buffer(nparr[::-1].tobytes(), colorfmt='rgb', bufferfmt='ubyte')
+        obj.texture=image_texture
+
+    def preview_image_popup(self, obj, touch):
+        if self.process_state == 9 and obj.collide_point(*touch.pos):
+            self.image_preview = BoxLayout()
+            self.image_preview.id = "image_preview"
+            self.image_preview.bind(pos=self.on_widget_pos_size, size=self.on_widget_pos_size)
+            self.add_widget(self.image_preview)
+
+
+    @mainthread
+    def add_image_preview_pattern(self):
+        for i in self.images:
+            nparr = np.zeros((i["height"], i["width"], 3), dtype=np.uint8)
+            nparr[:,:] = [41, 44, 52]
+            image_texture = Texture.create(size=(nparr.shape[1], nparr.shape[0]), colorfmt='rgb')
+            image_texture.blit_buffer(nparr.tobytes(), colorfmt='rgb', bufferfmt='ubyte')
+            image = Image(texture=image_texture, size_hint_y = None, allow_stretch=True)
+            image.bind(on_touch_down=self.preview_image_popup)
+            image.id = i
+            if self.training_popup is not None:
+                if self.training_popup.scrollview_images is not None:
+                    self.training_popup.scrollview_images.gridLayout.add_widget(image)
+
+    def image_load_thread(self):
+
+        tags = ""
+
+        for i in self.tags.keys():
+            if self.tags[i]["selected"] == True:
+                if tags == "":
+                    tags = i
+                else:
+                    tags += ","+i
+
+        url = ENDPOINT+'customvision/'+version+'/training/projects/'+project_id+'/images?taggingStatus=Tagged&tagIds='+tags
+
+        response = requests.get(url, headers = {"Training-Key": training_key})
+
+        self.images = json.loads(response.content)
+
+        self.add_image_preview_pattern()
+
+        while len(self.training_popup.scrollview_images.gridLayout.children) == 0:
+            if self.process_state == 9:
+                continue
+            else:
+                break
+
+        i = 1
+
+
+        while i in range(len(self.training_popup.scrollview_images.gridLayout.children)+1):
+            if self.process_state == 9:
+                image = self.training_popup.scrollview_images.gridLayout.children[-i]
+                binimage = requests.get(image.id["originalImageUri"]).content
+                nparr = np.frombuffer(binimage, np.uint8)
+                nparr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                nparr = cv2.cvtColor(nparr, cv2.COLOR_RGB2BGR)
+                self.preview_image_upload_texture(image, nparr)
+                """
+                buf = io.BytesIO(bimage)
+                cim = CoreImage(buf, ext=file_extension)
+                self.image = Image(texture=cim.texture)
+                self.add_widget(self.image)
+                """
+                i = i+1
+            else:
+                break
 
     def image_upload_thread(self, pixels, size):
-        self.is_process_ongoing = True
-
+        self.change_state(5)
         #texture = self.camera.texture
         #size=texture.size
         #pixels = texture.pixels
@@ -429,13 +851,17 @@ class Main(Widget):
 
         nparr = np.frombuffer(pixels, np.uint8).reshape((size[1], size[0], 4))
 
+        if platform == "android":
+            nparr = nparr[::-1]
+
         #print(nparr.shape)
-        img = cv2.cvtColor(nparr, cv2.COLOR_RGBA2BGR)
+        #img = cv2.cvtColor(nparr, cv2.COLOR_RGBA2BGR)
         #print(texture)
         #print(size)
         #print(img_gray)
 
-        retval, buffer = cv2.imencode('.jpg', img)
+        #retval, buffer = cv2.imencode('.jpg', img)
+        retval, buffer = cv2.imencode('.png', nparr)
 
         # Upload base64 jpg file to file
         """
@@ -451,27 +877,82 @@ class Main(Widget):
                 print("Image status: ", image.status)
         """
 
+        #Upload image
 
-        url = ENDPOINT+'customvision/v3.3/training/projects/'+project_id+'/images'
+        url = ENDPOINT+'customvision/'+version+'/training/projects/'+project_id+'/tags'
+        response = requests.get(url, headers = {"Training-Key": training_key})
+
+        tag_id = ""
+
+        tag_ids = json.loads(response.content)
+
+        for i in tag_ids:
+            if self.boundingBox_input_text == i["name"]:
+                tag_id = i["id"]
+                break
+
+        url = ENDPOINT+'customvision/'+version+'/projects/'+project_id+'/images?tagIds='+tag_id
 
         #use the 'headers' parameter to set the HTTP headers:
-        x = requests.post(url, data = bytes(buffer), headers = {"Content-Type": "application/octet-stream", "Training-Key": training_key})
+        response = requests.post(url, data = bytes(buffer), headers = {"Content-Type": "application/octet-stream", "Training-Key": training_key})
 
-        print(x.content)
+        image_detalis = json.loads(response.content)
+
+        image_id = image_detalis["images"][0]["image"]["id"]
+
+        url = ENDPOINT+'customvision/'+version+'/training/projects/'+project_id+'/images/regions'
+
+        startx,starty,stopx,stopy = self.get_calculated_coords()
+
+        region_json = {"regions":[
+            {
+                "imageId": image_id,
+                "tagId": tag_id,
+                "left": float(startx/self.camera.resolution[0]),
+                "top": float((self.camera.resolution[1]-stopy)/self.camera.resolution[1]),
+                "width": float((stopx-startx)/self.camera.resolution[0]),
+                "height": float((stopy-starty)/self.camera.resolution[1])
+            }
+        ]}
+
+        x = requests.post(url, data = json.dumps(region_json), headers = {"Content-Type": "application/json", "Training-Key": training_key})
 
         #self.camera.log = not self.camera.log
-        self.is_process_ongoing = False
+        self.change_state(0)
+
+    def train_button_pressed(self, obj):
+        if self.process_state == 0 or self.process_state == 10:
+            self.change_state(7)
+        elif self.process_state == 7:
+            self.change_state(8)
+        elif self.process_state == 8 or self.process_state == 9:
+            self.change_state(7)
 
     def button_pressed(self, obj):
         #print(self.ids.camera)
-        thread.start_new_thread( self.image_upload_thread, (self.camera.texture.pixels, self.camera.texture.size) )
-        #x = threading.Thread(target=self.image_upload_thread, args=(self.camera.texture.pixels, self.camera.texture.size))
+        if self.process_state == 0 or self.process_state == 10:
+            self.change_state(2)
+        elif self.process_state == 2 or self.process_state == 7 or self.process_state == 8 or self.process_state == 9:
+            if self.iterations["selected"] == None:
+                self.change_state(0)
+            else:
+                self.change_state(10)
+        elif self.process_state == 4:
+            self.boundingBox_input_text = self.boundingBox_input.text
+            self.remove_widget(self.boundingBox_input)
+        #thread.start_new_thread( self.image_upload_thread, (self.camera.texture.pixels, self.camera.texture.size) )
+            x = threading.Thread(target=self.image_upload_thread, args=(self.camera.texture.pixels, self.camera.texture.size))
+            x.daemon = True
+            x.start()
+
         #x.start()
         #x.join()
 
 
 
     def on_window_resize(self, window, width, height):
+
+        """
 
         self.update_metrics()
 
@@ -505,11 +986,35 @@ class Main(Widget):
         self.button.size = (width, height/10)
         self.button.pos = (0, height-height/10)
 
-        self.camera.size = (640/480*height*9/10, height*9/10)
-        self.camera.pos = ((width-self.camera.size[0])/2, 0)
+        self.boundingBox.size = self.camera.size
+        """
+        """
+        nparr = np.zeros((480, 640, 4), dtype=np.uint8)
+        nparr[:,:,:] = 255
+        image_texture = Texture.create(size=(nparr.shape[1], nparr.shape[0]), colorfmt='rgba')
+        image_texture.blit_buffer(nparr.tobytes(), colorfmt='rgba', bufferfmt='ubyte')
+        self.boundingBox.texture = image_texture
+        """
+
+        self.camera.size = (640/480*height*8/10, height*8/10)
+        self.camera.pos = ((width-self.camera.size[0])/2, height/10)
 
         self.boundingBox.size = self.camera.size
         self.boundingBox.pos = self.camera.pos
+
+        self.button.size = (width, height/10)
+        self.button.pos = (0, height-height/10)
+
+        self.train_button.size = (width, height/10)
+        self.train_button.pos = (0, 0)
+
+        if self.training_popup is not None:
+            self.training_popup.pos=((width-3*width/4)/2, (height-3*height/4)/2)
+            self.training_popup.size=(width*3/4, height*3/4)
+            with self.training_popup.canvas.before:
+                Color(233, 236, 239, 1)
+                Line(width=10, rounded_rectangle=(self.training_popup.pos[0], self.training_popup.pos[1], self.training_popup.size[0], self.training_popup.size[1], 25))
+                Rectangle(pos=(self.training_popup.pos[0], self.training_popup.pos[1]), size=(self.training_popup.size[0], self.training_popup.size[1]))
 
         """
         for item in self.camera.canvas.before.children:
