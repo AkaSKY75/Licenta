@@ -16,7 +16,7 @@ from kivy.utils import platform
 from kivy.uix.image import Image
 from kivy.core.image import Image as CoreImage
 from kivy.graphics.texture import Texture
-from kivy.graphics import Rotate, PushMatrix, PopMatrix, Translate, Color, Rectangle, BindTexture, Line, Ellipse
+from kivy.graphics import Rotate, PushMatrix, PopMatrix, Translate, Color, Rectangle, BindTexture, Line, Ellipse, InstructionGroup
 from kivy.clock import Clock
 from kivy.uix.camera import Camera
 from kivy.lang import Builder
@@ -359,7 +359,7 @@ class Main(FloatLayout):
                 self.boundingBox_coords = [(-1, -1), (-1, -1)]
                 self.camera.play = True
                 valid_state = True
-            elif self.process_state == 7 or self.process_state == 8 or self.process_state == 9:
+            elif self.process_state == 7 or self.process_state == 8 or self.process_state == 9 or self.process_state == 11 or self.process_state == 10:
                 self.button.text = "Label"
                 self.train_button.text = "Train"
                 self.training_popup.clear_widgets()
@@ -462,7 +462,7 @@ class Main(FloatLayout):
                 #x.daemon = True
                 #x.start()
                 valid_state = True
-            elif self.process_state == 8 or self.process_state == 9:
+            elif self.process_state == 8 or self.process_state == 9 or self.process_state == 11:
                 self.change_state(0)
                 self.change_state(7)
         elif state == 8:
@@ -503,7 +503,7 @@ class Main(FloatLayout):
 
                 valid_state = True
 
-            elif self.process_state == 9:
+            elif self.process_state == 9 or self.process_state == 11:
                 self.training_popup.remove_widget(self.training_popup.scrollview_images)
                 self.training_popup.remove_widget(self.training_popup.previous_image)
                 self.training_popup.add_widget(self.training_popup.scrollview_tags)
@@ -524,6 +524,28 @@ class Main(FloatLayout):
             if self.process_state == 2 or self.process_state == 7 or self.process_state == 8 or self.process_state == 9:
                 self.change_state(0)
                 valid_state = True
+        elif state == 11:
+            if self.process_state == 9:
+                for i in self.images:
+                    nparr = np.zeros((i["height"], i["width"], 3), dtype=np.uint8)
+                    nparr[:,:] = [41, 44, 52]
+                    image_texture = Texture.create(size=(nparr.shape[1], nparr.shape[0]), colorfmt='rgb')
+                    image_texture.blit_buffer(nparr.tobytes(), colorfmt='rgb', bufferfmt='ubyte')
+                    image = Image(texture=image_texture, size_hint_y = None, allow_stretch=True)
+                    image.bind(on_touch_down=self.preview_image_popup)
+                    image.id = i
+                    if self.training_popup is not None:
+                        if self.training_popup.scrollview_images is not None:
+                            self.training_popup.scrollview_images.gridLayout.add_widget(image)
+                    if self.process_state == 9:
+                        valid_state = True
+            elif self.process_state == 12:
+                self.image_preview.clear_widgets()
+                self.remove_widget(self.image_preview)
+                valid_state = True
+        elif state == 12:
+            if self.process_state == 11:
+                valid_state = True
         if valid_state == True:
             self.process_state = state
 
@@ -539,6 +561,12 @@ class Main(FloatLayout):
                 Color(0, 0, 0, 0.9)
                 #Line(width=10, rounded_rectangle=(self.training_popup.pos[0], self.training_popup.pos[1], self.training_popup.size[0], self.training_popup.size[1], 25))
                 Rectangle(pos=obj.pos, size=obj.size)
+        elif obj.id == "image_preview_image":
+            obj.canvas.remove(obj.InstructionGroup)
+            obj.InstructionGroup = InstructionGroup()
+            obj.InstructionGroup.add(Color(233, 236, 239, 0.75))
+            obj.InstructionGroup.add(Rectangle(pos=obj.pos, size=(obj.size[0]*0.25, obj.size[1])))
+            obj.canvas.add(obj.InstructionGroup)
         else:
             with obj.canvas.before:
                 Color(0, 255, 0, 0.5)
@@ -549,7 +577,7 @@ class Main(FloatLayout):
         self.tags[obj.id]["selected"] = state
 
     def training_popup_previous_page(self, obj, touch):
-        if self.process_state == 9 and obj.collide_point(*touch.pos):
+        if (self.process_state == 9 or self.process_state == 11) and obj.collide_point(*touch.pos):
             self.change_state(8)
 
     def training_popup_next_page(self, obj, touch):
@@ -774,27 +802,31 @@ class Main(FloatLayout):
         image_texture.blit_buffer(nparr[::-1].tobytes(), colorfmt='rgb', bufferfmt='ubyte')
         obj.texture=image_texture
 
+    def preview_image_popup_close(self, obj, touch):
+        if self.process_state == 12 and obj.collide_point(*touch.pos):
+            self.change_state(11)
+
     def preview_image_popup(self, obj, touch):
-        if self.process_state == 9 and obj.collide_point(*touch.pos):
-            self.image_preview = BoxLayout()
+        if self.process_state == 11 and obj.collide_point(*touch.pos):
+            self.image_preview = FloatLayout()
+            self.image_preview.image = Image(pos_hint={"x": 0.125, "y": 0.125}, size_hint=(0.75, 0.75), texture=obj.texture)
+            self.image_preview.image.id = "image_preview_image"
+            print(obj.id)
+            self.image_preview.image.InstructionGroup = InstructionGroup()
+            self.image_preview.image.bind(pos=self.on_widget_pos_size, size=self.on_widget_pos_size)
             self.image_preview.id = "image_preview"
             self.image_preview.bind(pos=self.on_widget_pos_size, size=self.on_widget_pos_size)
+            self.image_preview.close_button = Image(pos_hint={"x":.9, "y":.9}, size_hint=(.1, .1), source="close_button.png")
+            self.image_preview.close_button.bind(on_touch_up=self.preview_image_popup_close)
             self.add_widget(self.image_preview)
+            self.image_preview.add_widget(self.image_preview.close_button)
+            self.image_preview.add_widget(self.image_preview.image)
+            self.change_state(12)
 
 
     @mainthread
     def add_image_preview_pattern(self):
-        for i in self.images:
-            nparr = np.zeros((i["height"], i["width"], 3), dtype=np.uint8)
-            nparr[:,:] = [41, 44, 52]
-            image_texture = Texture.create(size=(nparr.shape[1], nparr.shape[0]), colorfmt='rgb')
-            image_texture.blit_buffer(nparr.tobytes(), colorfmt='rgb', bufferfmt='ubyte')
-            image = Image(texture=image_texture, size_hint_y = None, allow_stretch=True)
-            image.bind(on_touch_down=self.preview_image_popup)
-            image.id = i
-            if self.training_popup is not None:
-                if self.training_popup.scrollview_images is not None:
-                    self.training_popup.scrollview_images.gridLayout.add_widget(image)
+        self.change_state(11)
 
     def image_load_thread(self):
 
@@ -815,17 +847,19 @@ class Main(FloatLayout):
 
         self.add_image_preview_pattern()
 
-        while len(self.training_popup.scrollview_images.gridLayout.children) == 0:
+        while self.process_state != 11:
             if self.process_state == 9:
                 continue
             else:
                 break
 
         i = 1
+        length = 0
+        if self.process_state == 11 or self.process_state == 12:
+            length = len(self.training_popup.scrollview_images.gridLayout.children)+1
 
-
-        while i in range(len(self.training_popup.scrollview_images.gridLayout.children)+1):
-            if self.process_state == 9:
+        while i in range(length):
+            if self.process_state == 11 or self.process_state == 12:
                 image = self.training_popup.scrollview_images.gridLayout.children[-i]
                 binimage = requests.get(image.id["originalImageUri"]).content
                 nparr = np.frombuffer(binimage, np.uint8)
@@ -925,14 +959,14 @@ class Main(FloatLayout):
             self.change_state(7)
         elif self.process_state == 7:
             self.change_state(8)
-        elif self.process_state == 8 or self.process_state == 9:
+        elif self.process_state == 8 or self.process_state == 9 or self.process_state == 11:
             self.change_state(7)
 
     def button_pressed(self, obj):
         #print(self.ids.camera)
         if self.process_state == 0 or self.process_state == 10:
             self.change_state(2)
-        elif self.process_state == 2 or self.process_state == 7 or self.process_state == 8 or self.process_state == 9:
+        elif self.process_state == 2 or self.process_state == 7 or self.process_state == 8 or self.process_state == 9 or self.process_state == 11:
             if self.iterations["selected"] == None:
                 self.change_state(0)
             else:
