@@ -103,7 +103,7 @@ class Main(FloatLayout):
         #self.camera.size = (640/480*height*9/10, height*9/10)
         #self.camera.pos = ((width-self.camera.size[0])/2, 0)
         #self.camera = Camera(index=0, resolution=(640, 480), play=True, allow_stretch=True, pos=((Window.size[0]-640/480*Window.size[1]*8/10)/2, Window.size[1]/10), size=(640/480*Window.size[1]*8/10, Window.size[1]*8/10))
-        self.camera = Camera(index=0, resolution=(640, 480), play=True, allow_stretch=True, pos_hint={"x":0,"y":.1}, size_hint=(1, .8))
+        self.camera = Camera(index=0, resolution=(640, 480), play=True, allow_stretch=True, pos_hint={"x":0,"y":.1}, size_hint_y=.8)
 #       self.camera._camera.on_load = self.camera_on_load
         self.camera._camera.unbind(on_texture=self.camera.on_tex)
         self.camera._camera.bind(on_texture=self.on_texture_change)
@@ -112,12 +112,12 @@ class Main(FloatLayout):
 
         #self.boundingBox = Image(allow_stretch=True, pos=((Window.size[0]-640/480*Window.size[1]*8/10)/2, Window.size[1]/10), size=(640/480*Window.size[1]*8/10, Window.size[1]*8/10))
         self.boundingBox = Image(allow_stretch=True, pos_hint=self.camera.pos_hint, size_hint=self.camera.size_hint)
-        nparr = np.zeros((480, 640, 4), dtype=np.uint8)
-        #nparr[:,:] = [0, 255, 0, 127]
+        nparr = np.zeros((self.camera.resolution[1], self.camera.resolution[0], 4), dtype=np.uint8)
+        nparr[:,:] = [0, 255, 0, 127]
         self.blank_transparent_texture = Texture.create(size=(nparr.shape[1], nparr.shape[0]), colorfmt='rgba')
         self.blank_transparent_texture.blit_buffer(nparr.tobytes(), colorfmt='rgba', bufferfmt='ubyte')
         self.boundingBox.texture = self.blank_transparent_texture
-        self.clear_image()
+        #self.clear_image()
 
         """
         with self.camera.canvas.before:
@@ -193,7 +193,7 @@ class Main(FloatLayout):
 
         for i in response:
             self.tags[i["id"]] = {"name": i["name"], "selected": True}
-
+        print(self.tags)
         self.object_detection_thread = threading.Thread(target=self.detect_objects_thread)
         self.object_detection_thread.daemon = True
         self.object_detection_thread.start()
@@ -260,8 +260,7 @@ class Main(FloatLayout):
         elif self.process_state == 10:
             if self.boundingBox_label is not None:
                 self.remove_widget(self.boundingBox_label)
-            print(self.probabilities["class"])
-            self.boundingBox_label = Label(text=self.probabilities["class"]+"\n{:.2f}%".format(self.probabilities["probability"]*100), color=(255, 255, 255, 1), size=(dp(100), dp(50)), pos=(startx+dp(100), stopy+dp(50)))
+            self.boundingBox_label = Label(text=self.probabilities["class"]+"\n{:.2f}%".format(self.probabilities["probability"]*100), color=(1, 1, 1, 1), size_hint=(None, None), size=(dp(100), dp(50)), pos=(startx-20+dp(100), stopy+10+dp(50)))
             with self.boundingBox_label.canvas.before:
                 Color(0, 255, 0, 0.5)
                 Rectangle(pos=self.boundingBox_label.pos, size=self.boundingBox_label.size)
@@ -402,6 +401,12 @@ class Main(FloatLayout):
             if self.process_state == 4:
                 self.clear_image()
                 self.button.text = "Uploading..."
+                self.boundingBox_input_text = self.boundingBox_input.text
+                self.remove_widget(self.boundingBox_input)
+            #thread.start_new_thread( self.image_upload_thread, (self.camera.texture.pixels, self.camera.texture.size) )
+                x = threading.Thread(target=self.image_upload_thread, args=(self.camera.texture.pixels, self.camera.texture.size))
+                x.daemon = True
+                x.start()
                 #self.camera.play = True
                 valid_state = True
         elif state == 7:
@@ -468,7 +473,7 @@ class Main(FloatLayout):
                 #x.daemon = True
                 #x.start()
                 valid_state = True
-            elif self.process_state == 8 or self.process_state == 9 or self.process_state == 11:
+            elif self.process_state == 8:
                 self.change_state(0)
                 self.change_state(7)
         elif state == 8:
@@ -510,6 +515,7 @@ class Main(FloatLayout):
                 valid_state = True
 
             elif self.process_state == 9 or self.process_state == 11:
+                self.train_button.text = "Select iteration"
                 self.training_popup.remove_widget(self.training_popup.scrollview_images)
                 self.training_popup.remove_widget(self.training_popup.previous_image)
                 self.training_popup.add_widget(self.training_popup.scrollview_tags)
@@ -517,6 +523,7 @@ class Main(FloatLayout):
                 valid_state = True
         elif state == 9:
             if self.process_state == 8:
+                self.train_button.text = "Train"
                 self.training_popup.scrollview_images.gridLayout.clear_widgets()
                 self.training_popup.remove_widget(self.training_popup.scrollview_tags)
                 self.training_popup.remove_widget(self.training_popup.next_image)
@@ -560,6 +567,9 @@ class Main(FloatLayout):
             if self.process_state == 12:
                 Animation(size_hint_x=.25, duration=.5).start(self.image_preview.meta)
                 self.image_preview.meta_toggle_button.source = "arrow_left2.jpg"
+                valid_state = True
+        elif state == 14:
+            if self.process_state == 9 or self.process_state == 11:
                 valid_state = True
         if valid_state == True:
             self.process_state = state
@@ -660,17 +670,29 @@ class Main(FloatLayout):
             currentX = (newX/newWidth)*currentWidth
             currentY = (newY/newHeight)*currentHeight
             """
+
+            ratio = self.camera.resolution[0]/self.camera.resolution[1]
+
+            width = ratio*self.camera.size[1]
+
+            camera_blank_space = (self.camera.size[0]-width)/2
+
             startx,starty,stopx,stopy = self.get_calculated_coords()
 
-            original_coords = (int(startx/self.camera.resolution[0]*self.camera.size[0])+self.camera.pos[0], int(stopy/self.camera.resolution[1]*self.camera.size[1])+self.camera.pos[1])
-            self.boundingBox_input = TextInput(text="Place label here", size_hint=(None, None), pos_hint={"x":original_coords[0]/self.size[0],"y":original_coords[1]/self.size[1]}, size=(dp(100), dp(50)), background_color=(0, 255, 0, 0.5))
+            original_coords = (int(startx/self.camera.resolution[0]*width)+camera_blank_space, int(stopy/self.camera.resolution[1]*self.camera.size[1])+self.camera.pos[1])
+            self.boundingBox_input = TextInput(text="Place label here", size_hint=(None, None), pos=(original_coords[0], original_coords[1]), size=(dp(100), dp(50)), background_color=(0, 255, 0, 0.5))
             self.add_widget(self.boundingBox_input)
             self.change_state(4)
         return super(Main, self).on_touch_up(touch)
 
     def on_touch_move(self, touch):
-        if (self.process_state == 1 or self.process_state == 3) and touch.x >= self.camera.pos[0] and touch.x <= self.camera.size[0]+self.camera.pos[0] and touch.y >= self.camera.pos[1] and touch.y <= self.camera.size[1]+self.camera.pos[1]:
-            original_coords = (int((touch.x-self.camera.pos[0])/self.camera.size[0]*self.camera.resolution[0]), int((touch.y-self.camera.pos[1])/self.camera.size[1]*self.camera.resolution[1]))
+        ratio = self.camera.resolution[0]/self.camera.resolution[1]
+
+        width = ratio*self.camera.size[1]
+
+        camera_blank_space = (self.camera.size[0]-width)/2
+        if (self.process_state == 1 or self.process_state == 3) and touch.x >= camera_blank_space and touch.x <= self.camera.size[0]-camera_blank_space and touch.y >= self.camera.pos[1] and touch.y <= self.camera.size[1]+self.camera.pos[1]:
+            original_coords = (int((touch.x-camera_blank_space)/width*self.camera.resolution[0]), int((touch.y-self.camera.pos[1])/self.camera.size[1]*self.camera.resolution[1]))
             self.boundingBox_coords[1] = original_coords
             #self.clear_image()
             self.create_boundingBox()
@@ -678,7 +700,12 @@ class Main(FloatLayout):
         return super(Main, self).on_touch_move(touch)
 
     def on_touch_down(self, touch):
-        if touch.x >= self.camera.pos[0] and touch.x <= self.camera.size[0]+self.camera.pos[0] and touch.y >= self.camera.pos[1] and touch.y <= self.camera.size[1]+self.camera.pos[1]:
+        ratio = self.camera.resolution[0]/self.camera.resolution[1]
+
+        width = ratio*self.camera.size[1]
+
+        camera_blank_space = (self.camera.size[0]-width)/2
+        if touch.x >= camera_blank_space and touch.x <= self.camera.size[0]-camera_blank_space and touch.y >= self.camera.pos[1] and touch.y <= self.camera.size[1]+self.camera.pos[1]:
             if self.process_state == 2 or self.process_state == 1 or (self.process_state == 4 and (touch.x < self.boundingBox_input.pos[0] or touch.x > self.boundingBox_input.pos[0]+self.boundingBox_input.size[0] or touch.y < self.boundingBox_input.pos[1] or touch.y > self.boundingBox_input.pos[1]+self.boundingBox_input.size[1])):
                 # Formula that calculates actual coordinates of resized image
                 """
@@ -688,7 +715,21 @@ class Main(FloatLayout):
                 currentX = (newX/newWidth)*currentWidth
                 currentY = (newY/newHeight)*currentHeight
                 """
-                original_coords = (int((touch.x-self.camera.pos[0])/self.camera.size[0]*self.camera.resolution[0]), int((touch.y-self.camera.pos[1])/self.camera.size[1]*self.camera.resolution[1]))
+
+                original_coords = (int((touch.x-camera_blank_space)/width*self.camera.resolution[0]), int((touch.y-self.camera.pos[1])/self.camera.size[1]*self.camera.resolution[1]))
+
+                nparr = np.zeros((480, 640, 4), dtype=np.uint8)
+
+                nparr[:,original_coords[0]:original_coords[0]+10,1::2] = 255
+                nparr[original_coords[1]:original_coords[1]+10,:,1::2] = 255
+
+                #nparr[:,int(touch.pos[0]):int(touch.pos[0])+10,1::2] = 255
+                #nparr[int(touch.pos[1]):int(touch.pos[1])+10,:,1::2] = 255
+
+                image_texture = Texture.create(size=(nparr.shape[1], nparr.shape[0]), colorfmt='rgba')
+                image_texture.blit_buffer(nparr.tobytes(), colorfmt='rgba', bufferfmt='ubyte')
+                self.boundingBox.texture = image_texture
+                self.boundingBox.canvas.ask_update()
                 """
                 print("Mouse coords are: ("+str(touch.x)+", "+str(touch.y)+")")
                 print("Original coords are: ("+str(original_coords[0])+", "+str(original_coords[1])+")")
@@ -822,7 +863,7 @@ class Main(FloatLayout):
                 #use the 'headers' parameter to set the HTTP headers:
                 response = requests.delete(url, headers = {"Training-Key": training_key})
 
-                time.sleep(1)
+            time.sleep(1)
 
     @mainthread
     def preview_image_upload_texture(self, obj, nparr):
@@ -952,7 +993,6 @@ class Main(FloatLayout):
                 break
 
     def image_upload_thread(self, pixels, size):
-        self.change_state(5)
         #texture = self.camera.texture
         #size=texture.size
         #pixels = texture.pixels
@@ -970,6 +1010,7 @@ class Main(FloatLayout):
         #print(img_gray)
 
         #retval, buffer = cv2.imencode('.jpg', img)
+        nparr = cv2.cvtColor(nparr, cv2.COLOR_RGBA2BGRA)
         retval, buffer = cv2.imencode('.png', nparr)
 
         # Upload base64 jpg file to file
@@ -988,19 +1029,19 @@ class Main(FloatLayout):
 
         #Upload image
 
-        url = ENDPOINT+'customvision/'+version+'/training/projects/'+project_id+'/tags'
-        response = requests.get(url, headers = {"Training-Key": training_key})
-
         tag_id = ""
 
-        tag_ids = json.loads(response.content)
-
-        for i in tag_ids:
-            if self.boundingBox_input_text == i["name"]:
-                tag_id = i["id"]
+        for i in self.tags.keys():
+            if self.boundingBox_input_text == self.tags[i]["name"]:
+                tag_id = i
                 break
 
-        url = ENDPOINT+'customvision/'+version+'/projects/'+project_id+'/images?tagIds='+tag_id
+        if tag_id == "":
+            url = ENDPOINT+'customvision/'+version+'/training/projects/'+project_id+'/tags?name='+self.boundingBox_input_text
+            response = requests.post(url, headers = {"Content-Type": "application/octet-stream", "Training-Key": training_key})
+            tag_id = json.loads(response.content)["id"]
+
+        url = ENDPOINT+'customvision/'+version+'/training/projects/'+project_id+'/images?tagIds='+tag_id
 
         #use the 'headers' parameter to set the HTTP headers:
         response = requests.post(url, data = bytes(buffer), headers = {"Content-Type": "application/octet-stream", "Training-Key": training_key})
@@ -1034,8 +1075,10 @@ class Main(FloatLayout):
             self.change_state(7)
         elif self.process_state == 7:
             self.change_state(8)
-        elif self.process_state == 8 or self.process_state == 9 or self.process_state == 11:
+        elif self.process_state == 8:
             self.change_state(7)
+        elif self.process_state == 9 or self.process_state == 11:
+            self.change_state(14)
 
     def button_pressed(self, obj):
         #print(self.ids.camera)
@@ -1047,12 +1090,7 @@ class Main(FloatLayout):
             else:
                 self.change_state(10)
         elif self.process_state == 4:
-            self.boundingBox_input_text = self.boundingBox_input.text
-            self.remove_widget(self.boundingBox_input)
-        #thread.start_new_thread( self.image_upload_thread, (self.camera.texture.pixels, self.camera.texture.size) )
-            x = threading.Thread(target=self.image_upload_thread, args=(self.camera.texture.pixels, self.camera.texture.size))
-            x.daemon = True
-            x.start()
+            self.change_state(5)
 
         #x.start()
         #x.join()
