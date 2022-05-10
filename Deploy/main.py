@@ -5,6 +5,7 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.pagelayout import PageLayout
 from kivy.uix.stacklayout import StackLayout
 from kivy.uix.floatlayout import FloatLayout
+from kivy.animation import Animation
 from kivy.clock import mainthread
 from kivy.uix.checkbox import CheckBox
 from kivy.uix.widget import Widget
@@ -57,6 +58,11 @@ prediction_key = "5887d793471f48dc8417e84c699d561d"
 prediction_resource_id = "/subscriptions/2c0c2800-5672-4899-963d-d9c6e8984e61/resourceGroups/appsvc_windows_centralus/providers/Microsoft.CognitiveServices/accounts/Licenta"
 project_id = "1aa5fcfe-5fa4-494d-96a1-2208b8c148e7"
 version = "v3.4-preview"
+
+colors = [(0, 72, 186), (176, 191, 26), (124, 185, 232), (178, 132, 190),
+        (114, 160, 193), (219, 45, 67), (196, 98, 16), (159, 43, 104), (59, 122, 87),
+        (255, 191, 0), (61, 220, 132), (205, 149, 117), (102, 93, 30), (132, 27, 45),
+        (141, 182, 0), (0, 255, 255)]
 
 class Main(FloatLayout):
     def __init__(self, **kwargs):
@@ -539,12 +545,21 @@ class Main(FloatLayout):
                             self.training_popup.scrollview_images.gridLayout.add_widget(image)
                     if self.process_state == 9:
                         valid_state = True
-            elif self.process_state == 12:
+            elif self.process_state == 12 or self.process_state == 13:
                 self.image_preview.clear_widgets()
                 self.remove_widget(self.image_preview)
                 valid_state = True
         elif state == 12:
             if self.process_state == 11:
+                valid_state = True
+            elif self.process_state == 13:
+                Animation(size_hint_x=.0, duration=.5).start(self.image_preview.meta)
+                self.image_preview.meta_toggle_button.source = "arrow_right2.jpg"
+                valid_state = True
+        elif state == 13:
+            if self.process_state == 12:
+                Animation(size_hint_x=.25, duration=.5).start(self.image_preview.meta)
+                self.image_preview.meta_toggle_button.source = "arrow_left2.jpg"
                 valid_state = True
         if valid_state == True:
             self.process_state = state
@@ -557,21 +572,34 @@ class Main(FloatLayout):
                 #Line(width=10, rounded_rectangle=(self.training_popup.pos[0], self.training_popup.pos[1], self.training_popup.size[0], self.training_popup.size[1], 25))
                 Rectangle(pos=obj.pos, size=obj.size)
         elif obj.id == "image_preview":
+            """
+            obj.canvas.after.remove(obj.InstructionGroup)
+            obj.InstructionGroup = InstructionGroup()
+            obj.InstructionGroup.add(Color(233, 236, 239, 0.75))
+            obj.InstructionGroup.add(Rectangle(pos=obj.pos, size=(obj.size[0]*0.25, obj.size[1]*0.75)))
+            obj.canvas.after.add(obj.InstructionGroup)
+            """
             with obj.canvas.before:
                 Color(0, 0, 0, 0.9)
                 #Line(width=10, rounded_rectangle=(self.training_popup.pos[0], self.training_popup.pos[1], self.training_popup.size[0], self.training_popup.size[1], 25))
                 Rectangle(pos=obj.pos, size=obj.size)
-        elif obj.id == "image_preview_image":
-            obj.canvas.remove(obj.InstructionGroup)
-            obj.InstructionGroup = InstructionGroup()
-            obj.InstructionGroup.add(Color(233, 236, 239, 0.75))
-            obj.InstructionGroup.add(Rectangle(pos=obj.pos, size=(obj.size[0]*0.25, obj.size[1])))
-            obj.canvas.add(obj.InstructionGroup)
+        elif obj.id == "image_preview_meta":
+            with obj.canvas.before:
+                Color(233, 236, 239, 0.75)
+                #Line(width=10, rounded_rectangle=(self.training_popup.pos[0], self.training_popup.pos[1], self.training_popup.size[0], self.training_popup.size[1], 25))
+                Rectangle(pos=obj.pos, size=obj.size)
         else:
             with obj.canvas.before:
                 Color(0, 255, 0, 0.5)
                 #boxLayout.line = Line(points=[0, 10, 100, 0], width=10)
                 Rectangle(pos=obj.pos, size=obj.size)
+        """
+        elif obj.id == "image_preview_meta":
+            with obj.canvas.before:
+                Color(233, 236, 239, 0.75)
+                #Line(width=10, rounded_rectangle=(self.training_popup.pos[0], self.training_popup.pos[1], self.training_popup.size[0], self.training_popup.size[1], 25))
+                Rectangle(pos=obj.pos, size=obj.size)
+        """
 
     def tag_select(self, obj, state):
         self.tags[obj.id]["selected"] = state
@@ -803,24 +831,71 @@ class Main(FloatLayout):
         obj.texture=image_texture
 
     def preview_image_popup_close(self, obj, touch):
-        if self.process_state == 12 and obj.collide_point(*touch.pos):
+        if (self.process_state == 12 or self.process_state == 13) and obj.collide_point(*touch.pos):
             self.change_state(11)
 
+    def preview_image_popup_meta(self, obj, touch):
+        if obj.collide_point(*touch.pos):
+            if self.process_state == 12:
+                self.change_state(13)
+            elif self.process_state == 13:
+                self.change_state(12)
+
     def preview_image_popup(self, obj, touch):
-        if self.process_state == 11 and obj.collide_point(*touch.pos):
+        if self.process_state == 11 and obj.collide_point(*touch.pos): # touch.is_double_touch
             self.image_preview = FloatLayout()
-            self.image_preview.image = Image(pos_hint={"x": 0.125, "y": 0.125}, size_hint=(0.75, 0.75), texture=obj.texture)
-            self.image_preview.image.id = "image_preview_image"
-            print(obj.id)
-            self.image_preview.image.InstructionGroup = InstructionGroup()
-            self.image_preview.image.bind(pos=self.on_widget_pos_size, size=self.on_widget_pos_size)
+            #self.image_preview.InstructionGroup = InstructionGroup()
+            self.image_preview.meta = BoxLayout(pos_hint={"x": 0.125}, size_hint=(.0, 1))
+            self.image_preview.meta.id = "image_preview_meta"
+            self.image_preview.meta.bind(pos=self.on_widget_pos_size, size=self.on_widget_pos_size)
+            self.image_preview.meta.scrollView = ScrollView(size_hint_y=.9, pos_hint={"x": .1})
+            #self.image_preview.meta = ScrollView()
+            self.image_preview.meta.scrollView.stackLayout = StackLayout(size_hint_y=None)
+            self.image_preview.meta.scrollView.stackLayout.bind(minimum_height=self.image_preview.meta.scrollView.stackLayout.setter('height'))
+            boxLayout = BoxLayout(size_hint_y=None, height=dp(20), orientation="vertical")
+            label = Label(text="Used tags for image", color=(255, 255, 255))
+            self.image_preview.meta.scrollView.stackLayout.add_widget(boxLayout)
+            boxLayout.add_widget(label)
+
+            self.image_preview.image = Image(pos_hint={"x": 0.125}, size_hint=(0.75, 1), allow_stretch = True)
+            texture = obj.texture
+            i = 0
+            for i in range(len(obj.id["tags"])):
+                boxLayout = BoxLayout(size_hint_y=None, height=dp(20), orientation="vertical")
+                label = Label(text=obj.id["tags"][i]["tagName"], color=(colors[i][0]/255, colors[i][1]/255, colors[i][2]/255, 1), size_hint_x=.5, pos_hint={"x":.125})
+                self.image_preview.meta.scrollView.stackLayout.add_widget(boxLayout)
+                boxLayout.add_widget(label)
+                for j in obj.id["regions"]:
+                    if j["tagId"] == obj.id["tags"][i]["tagId"]:
+                        nparr = np.frombuffer(texture.pixels, dtype=np.uint8).reshape(texture.size[1], texture.size[0], 4)
+                        nparr = nparr[::-1].copy()
+                        startx = int(texture.size[0]*j["left"])
+                        starty = int(texture.size[1]*j["top"])
+                        stopx = int(startx+texture.size[0]*j["width"])
+                        stopy = int(starty+texture.size[1]*j["height"])
+                        #print(colors[i]+(255,))
+                        nparr[starty:stopy,startx:startx+10] = colors[i]+(255,)
+                        nparr[starty:stopy,stopx-10:stopx] = colors[i]+(255,)
+                        nparr[starty:starty+10,startx:stopx] = colors[i]+(255,)
+                        nparr[stopy-10:stopy,startx:stopx] = colors[i]+(255,)
+                        texture = Texture.create(size=(nparr.shape[1], nparr.shape[0]), colorfmt='rgba')
+                        texture.blit_buffer(nparr[::-1].tobytes(), colorfmt='rgba', bufferfmt='ubyte')
+            self.image_preview.image.texture = texture
             self.image_preview.id = "image_preview"
             self.image_preview.bind(pos=self.on_widget_pos_size, size=self.on_widget_pos_size)
             self.image_preview.close_button = Image(pos_hint={"x":.9, "y":.9}, size_hint=(.1, .1), source="close_button.png")
             self.image_preview.close_button.bind(on_touch_up=self.preview_image_popup_close)
+
+            self.image_preview.meta_toggle_button = Image(pos_hint={"x": 0.125}, size_hint=(0.1, 0.1), source="arrow_right2.jpg")
+            self.image_preview.meta_toggle_button.bind(on_touch_up=self.preview_image_popup_meta)
+
             self.add_widget(self.image_preview)
             self.image_preview.add_widget(self.image_preview.close_button)
             self.image_preview.add_widget(self.image_preview.image)
+            self.image_preview.add_widget(self.image_preview.meta)
+            self.image_preview.meta.add_widget(self.image_preview.meta.scrollView)
+            self.image_preview.meta.scrollView.add_widget(self.image_preview.meta.scrollView.stackLayout)
+            self.image_preview.add_widget(self.image_preview.meta_toggle_button)
             self.change_state(12)
 
 
@@ -855,11 +930,11 @@ class Main(FloatLayout):
 
         i = 1
         length = 0
-        if self.process_state == 11 or self.process_state == 12:
+        if self.process_state == 11 or self.process_state == 12 or self.process_state == 13:
             length = len(self.training_popup.scrollview_images.gridLayout.children)+1
 
         while i in range(length):
-            if self.process_state == 11 or self.process_state == 12:
+            if self.process_state == 11 or self.process_state == 12 or self.process_state == 13:
                 image = self.training_popup.scrollview_images.gridLayout.children[-i]
                 binimage = requests.get(image.id["originalImageUri"]).content
                 nparr = np.frombuffer(binimage, np.uint8)
